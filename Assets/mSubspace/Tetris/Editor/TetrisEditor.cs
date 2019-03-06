@@ -300,6 +300,8 @@ namespace mSubspace.Games
                     }
                 }
 
+                ClearRows();
+
                 SpawnPiece();
             }
 
@@ -310,6 +312,60 @@ namespace mSubspace.Games
                 currentPiece.row = 0;
                 lastCurrentPieceMoveDownTime = EditorApplication.timeSinceStartup;
                 failedCurrentPieceDownAttempts = 0;
+            }
+
+            private void ClearRows()
+            {
+                for (int row = gameBoardRows - 1; row >= 0; --row)
+                {
+                    // Is the row full?
+                    bool rowIsFull = true;
+                    for (int col = 0; col < gameBoardCols; ++col)
+                    {
+                        if (!gameBoard[Index(col, row, gameBoardCols)].isFilled)
+                        {
+                            rowIsFull = false;
+                            continue;
+                        }
+                    }
+
+                    if (rowIsFull)
+                    {
+                        // Delete row.
+                        for (int col = 0; col < gameBoardCols; ++col)
+                        {
+                            gameBoard[Index(col, row, gameBoardCols)].isFilled = false;
+                        }
+
+                        // Shift everything above down a row, for each row above, copy it down.
+                        for (int cpyRow = row - 1; cpyRow >= 0; --cpyRow)
+                        {
+                            for (int col = 0; col < gameBoardCols; ++col)
+                            {
+                                int targetRow = cpyRow + 1;
+
+                                BoardTile targetCell = gameBoard[Index(col, targetRow, gameBoardCols)];
+                                BoardTile cellToCopy = gameBoard[Index(col, cpyRow, gameBoardCols)];
+
+                                targetCell.isFilled = cellToCopy.isFilled;
+                                targetCell.color = cellToCopy.color;
+                            }
+                        }
+
+                        // Clear the uppermost row (nothing to copy down into that).
+                        for (int col = 0; col < gameBoardCols; ++col)
+                        {
+                            BoardTile targetCell = gameBoard[Index(col, 0, gameBoardCols)];
+                            targetCell.isFilled = false;
+                        }
+
+                        ++row; // Adjust row index back one down so we continue checking other rows from the right spot.
+
+                        // Note: future optimization, may be good to check if a clear row is hit when shifting down so we don't
+                        // have to shift all the cells down every time. Then again this will happen when the screen is full anyway
+                        // so maybe not the right optimization to focus on.
+                    }
+                }
             }
 
             public bool HasActivePiece()
