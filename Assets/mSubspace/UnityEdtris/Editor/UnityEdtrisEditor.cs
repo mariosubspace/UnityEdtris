@@ -5,9 +5,9 @@ using UnityEditor;
 
 namespace mSubspace.Games
 {
-    public class TetrisEditor : EditorWindow
+    public class UnityEdtrisEditor : EditorWindow
     {
-        class TetrisPiece
+        class EdtrisPiece
         {
             public enum PieceType
             {
@@ -111,7 +111,7 @@ namespace mSubspace.Games
             public Color color;
             public PieceType pieceType;
 
-            public TetrisPiece()
+            public EdtrisPiece()
             {
                 // Construct with a random piece.
                 int randPiece = (int)(Random.value * PIECE_MAPS.GetLength(0));
@@ -206,7 +206,7 @@ namespace mSubspace.Games
 
             // Board Data
             BoardTile[] gameBoard = new BoardTile[0];
-            TetrisPiece currentPiece = null;
+            EdtrisPiece currentPiece = null;
             public InfoMessage infoMessage = new InfoMessage { message = "", color = Color.white };
 
             // Player Data
@@ -423,7 +423,7 @@ namespace mSubspace.Games
                 }
 
                 // Did we perform a t-spin?
-                if (TetrisPiece.PieceType.T == currentPiece.pieceType)
+                if (EdtrisPiece.PieceType.T == currentPiece.pieceType)
                 {
                     // If up, down, left, and right are invalid then we performed a t-spin.
                     if (
@@ -459,7 +459,7 @@ namespace mSubspace.Games
 
             private void SpawnPiece()
             {
-                currentPiece = new TetrisPiece();
+                currentPiece = new EdtrisPiece();
                 currentPiece.col = (gameBoardCols / 2);
                 currentPiece.row = 0;
                 lastCurrentPieceMoveDownTime = EditorApplication.timeSinceStartup;
@@ -533,7 +533,7 @@ namespace mSubspace.Games
 
                 if (4 == rowsClearedThisPass)
                 {
-                    SetInfoMessage("Tetris!", Color.cyan, 10);
+                    SetInfoMessage("Edtris!", Color.cyan, 10);
                 }
             }
 
@@ -625,7 +625,7 @@ namespace mSubspace.Games
                 return true;
             }
 
-            public ValidityResult IsValidPosition(TetrisPiece piece)
+            public ValidityResult IsValidPosition(EdtrisPiece piece)
             {
                 for (int row = piece.row; row < piece.row + 4; ++row)
                 {
@@ -648,7 +648,7 @@ namespace mSubspace.Games
                 return ValidityResult.Valid;
             }
 
-            public ValidityResult IsValidPosition(TetrisPiece piece, int colOffset, int rowOffset)
+            public ValidityResult IsValidPosition(EdtrisPiece piece, int colOffset, int rowOffset)
             {
                 piece.col += colOffset;
                 piece.row += rowOffset;
@@ -676,11 +676,11 @@ namespace mSubspace.Games
         bool keyIsDown = false;
         float infoPanelWidthPx = 200;
 
-        [MenuItem("mSubspace/Games/Tetris")]
+        [MenuItem("mSubspace/Games/UnityEdtris")]
         public static void Init()
         {
-            TetrisEditor w = GetWindow<TetrisEditor>();
-            w.titleContent = new GUIContent("Tetris?!");
+            UnityEdtrisEditor w = GetWindow<UnityEdtrisEditor>();
+            w.titleContent = new GUIContent("UnityEdtris?!");
             w.Show();
         }
 
