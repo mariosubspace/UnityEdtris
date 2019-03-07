@@ -128,6 +128,28 @@ namespace mSubspace.Games
 
         class GameBoard
         {
+            class BoardTile
+            {
+                public bool isFilled;
+                public Color color;
+            }
+
+            public struct InfoMessage
+            {
+                public string message;
+                public Color color;
+                public double messageTime;
+
+                /// <summary>Negative values mean infinite duration.</summary>
+                public double messageDuration;
+
+                public bool IsNotExpired()
+                {
+                    return ( 0 > messageDuration ) || ( ( EditorApplication.timeSinceStartup - messageTime ) <= messageDuration );
+                }
+            }
+
+            // Layout Data
             public const int BLOCK_PIXEL_SIZE = 14; // Around the size of a toggle button.
 
             Rect gameBoardRect;
@@ -141,15 +163,15 @@ namespace mSubspace.Games
             float xLeftOffset;
             float yTopOffset;
 
-            class BoardTile
-            {
-                public bool isFilled;
-                public Color color;
-            }
-
+            // Board Data
             BoardTile[] gameBoard = new BoardTile[0];
             TetrisPiece currentPiece = null;
+            public InfoMessage infoMessage = new InfoMessage { message = "", color = Color.white };
 
+            // Player Data
+            int totalRowsCleared = 0;
+
+            // Move Data
             readonly float FALL_SPEED = 2f; // blocks per second.
             readonly int PIECE_DOWN_ATTEMPTS_BEFORE_LOCKING = 2;
 
@@ -187,10 +209,27 @@ namespace mSubspace.Games
                         //EditorGUI.LabelField(blockRect, "", EditorStyles.helpBox);
                         //GUI.color = Color.white;
 
-                        EditorGUI.Toggle(checkboxRect, tile.isFilled || currentPieceHit);
+                        bool tileState = tile.isFilled || currentPieceHit;
+                        bool newTileState = EditorGUI.Toggle(checkboxRect, tileState);
+                        if (newTileState != tileState)
+                        {
+                            SetInfoMessage("Cheater! >_<", new Color(1, 0.5f, 1, 1), 10);
+                            tile.isFilled = newTileState;
+                            tile.color = Color.magenta;
+                        }
                         GUI.color = Color.white;
                     }
                 }
+            }
+
+            private void SetInfoMessage(string message, Color color, double duration = 0)
+            {
+                infoMessage = new InfoMessage { message = message, color = color, messageTime = EditorApplication.timeSinceStartup, messageDuration = duration };
+            }
+
+            public InfoMessage GetInfoMessage()
+            {
+                return infoMessage;
             }
 
             private void UpdateBoardLayout(Rect gameBoardRect)
@@ -212,12 +251,39 @@ namespace mSubspace.Games
                     yTopOffset = gameBoardRect.y + (fullAreaHeight - gameBoardHeight) / 2.0f;
 
                     BoardTile[] newGameBoard = new BoardTile[newGameBoardCols * newGameBoardRows];
+                    
                     Copy(ref gameBoard, gameBoardCols, gameBoardRows, ref newGameBoard, newGameBoardCols, newGameBoardRows);
+
+                    // Only copying the current board contents to the new layout mostly works, but it can leave islands of blocks that
+                    // can't easily be detected by just shifting everything down to the lowest spot (mostly if you resize more than once).
+                    // Maybe revisit this later, but for now let's clear the board after the resize.
+                    ClearBoard(ref newGameBoard, newGameBoardCols, newGameBoardRows);
+                    ResetState();
+
                     gameBoard = newGameBoard;
 
                     gameBoardCols = newGameBoardCols;
                     gameBoardRows = newGameBoardRows;
                 }
+            }
+
+            private void ClearBoard(ref BoardTile[] board, int cols, int rows)
+            {
+                for (int row = 0; row < rows; ++row)
+                {
+                    for (int col = 0; col < cols; ++col)
+                    {
+                        BoardTile tile = board[Index(col, row, cols)];
+                        tile.isFilled = false;
+                    }
+                }
+            }
+
+            private void ResetState()
+            {
+                totalRowsCleared = 0;
+                failedCurrentPieceDownAttempts = 0;
+                SetInfoMessage("", Color.white);
             }
 
             private void Copy(ref BoardTile[] oldBoard, int oldCols, int oldRows, ref BoardTile[] newBoard, int newCols, int newRows)
@@ -254,8 +320,8 @@ namespace mSubspace.Games
                 {
                     double elapsedTime = EditorApplication.timeSinceStartup - lastCurrentPieceMoveDownTime;
                     int blocksToMove = (int)(elapsedTime * FALL_SPEED);
-                    double remainingTime = elapsedTime - blocksToMove / FALL_SPEED;
-                    lastCurrentPieceMoveDownTime = EditorApplication.timeSinceStartup - remainingTime;
+                    //double remainingTime = elapsedTime - blocksToMove / adjustedFallSpeed;
+                    //lastCurrentPieceMoveDownTime = EditorApplication.timeSinceStartup - remainingTime;
 
                     for (int i = 0; i < blocksToMove; ++i)
                     {
@@ -300,7 +366,7 @@ namespace mSubspace.Games
                     }
                 }
 
-                ClearRows();
+                ClearFullRows();
 
                 SpawnPiece();
             }
@@ -309,13 +375,15 @@ namespace mSubspace.Games
             {
                 currentPiece = new TetrisPiece();
                 currentPiece.col = (gameBoardCols / 2);
-                currentPiece.row = 0;
+                currentPiece.row = -1;
                 lastCurrentPieceMoveDownTime = EditorApplication.timeSinceStartup;
                 failedCurrentPieceDownAttempts = 0;
             }
 
-            private void ClearRows()
+            private void ClearFullRows()
             {
+                int rowsClearedThisPass = 0;
+
                 for (int row = gameBoardRows - 1; row >= 0; --row)
                 {
                     // Is the row full?
@@ -331,6 +399,9 @@ namespace mSubspace.Games
 
                     if (rowIsFull)
                     {
+                        ++totalRowsCleared;
+                        ++rowsClearedThisPass;
+
                         // Delete row.
                         for (int col = 0; col < gameBoardCols; ++col)
                         {
@@ -366,6 +437,11 @@ namespace mSubspace.Games
                         // so maybe not the right optimization to focus on.
                     }
                 }
+
+                if (4 == rowsClearedThisPass)
+                {
+                    SetInfoMessage("Tetris!", Color.cyan, 5);
+                }
             }
 
             public bool HasActivePiece()
@@ -376,6 +452,8 @@ namespace mSubspace.Games
             public void RotatePiece()
             {
                 if (currentPiece != null) currentPiece.RotatePiece();
+
+                failedCurrentPieceDownAttempts = Mathf.Max(0, failedCurrentPieceDownAttempts - 1);
             }
 
             public bool MovePieceRight()
@@ -406,8 +484,10 @@ namespace mSubspace.Games
                 return true;
             }
 
-            private bool MovePieceDown()
+            public bool MovePieceDown()
             {
+                lastCurrentPieceMoveDownTime = EditorApplication.timeSinceStartup;
+
                 currentPiece.row += 1;
                 if (!IsValidPosition(currentPiece))
                 {
@@ -436,11 +516,18 @@ namespace mSubspace.Games
 
                 return true;
             }
+
+            public int GetRowsCleared()
+            {
+                return totalRowsCleared;
+            }
         }
 
         GameBoard gameBoard;
-
         bool keyIsDown = false;
+        float infoPanelWidthPx = 200;
+        double downArrowKeyHoldStartTime = 0f;
+        double downHoldSlideThreshold = 0.2; // if holding for longer than this, increase block move down speed.
 
         [MenuItem("mSubspace/Games/Tetris")]
         public static void Init()
@@ -466,7 +553,50 @@ namespace mSubspace.Games
 
         private void OnGUI()
         {
-            gameBoard.Draw(new Rect(0, 0, position.width, position.height));
+            Rect infoPanelRect = new Rect(position.width - infoPanelWidthPx, 0, infoPanelWidthPx, position.height);
+            Rect gameBoardRect = new Rect(0, 0, position.width - infoPanelWidthPx, position.height);
+
+            gameBoard.Draw(gameBoardRect);
+
+            GUILayout.BeginArea(infoPanelRect);
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("Rows Cleared", EditorStyles.boldLabel);
+
+                GUI.backgroundColor = Color.grey;
+                EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
+                {
+                    EditorGUILayout.LabelField(gameBoard.GetRowsCleared().ToString(), EditorStyles.boldLabel);
+                }
+                EditorGUILayout.EndHorizontal();
+                GUI.backgroundColor = Color.white;
+
+
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("Info Message", EditorStyles.boldLabel);
+
+                GUI.backgroundColor = Color.grey;
+                EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
+                {
+                    GameBoard.InfoMessage message = gameBoard.GetInfoMessage();
+                    if (message.IsNotExpired())
+                    {
+                        GUI.contentColor = message.color;
+                        EditorGUILayout.LabelField(message.message, EditorStyles.boldLabel);
+                        GUI.contentColor = Color.white;
+                    }
+                    else
+                    {
+                        EditorGUILayout.LabelField("");
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
+                GUI.backgroundColor = Color.white;
+
+            }
+            GUILayout.EndArea();
+
+            GUI.FocusControl(null);
 
             // Repeated events while key is held down (left/right movement)
             if (Event.current.rawType == EventType.KeyDown)
@@ -483,6 +613,11 @@ namespace mSubspace.Games
                             gameBoard.MovePieceLeft();
                             break;
                         }
+                    case KeyCode.DownArrow:
+                        {
+                            gameBoard.MovePieceDown();
+                            break;
+                        }
                 }
             }
 
@@ -496,7 +631,8 @@ namespace mSubspace.Games
                             gameBoard.RotatePiece();
                             break;
                         }
-                    case KeyCode.DownArrow:
+                    case KeyCode.Space:
+                    case KeyCode.RightControl:
                         {
                             gameBoard.SlamPieceDown();
                             break;
@@ -504,7 +640,6 @@ namespace mSubspace.Games
                 }
 
                 keyIsDown = true;
-                Event.current.Use();
             }
             else if (Event.current.rawType == EventType.KeyUp)
             {
